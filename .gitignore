@@ -1,0 +1,42 @@
+# === GH CLI LOCAL CREDENTIALS (project-scoped, never commit) ===
+.gh-config/
+
+# === SECRETS & ENVIRONMENT ===
+.env
+.env.local
+.env.production
+.env.*.local
+
+# === NODE ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+
+# === BUILD / TEMP ===
+dist/
+build/
+.cache/
+*.tmp
+*.temp
+
+# === OS FILES ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === EDITOR ===
+.vscode/
+.idea/
+*.suo
+*.user
+
+# === LOGS ===
+logs/
+*.log
+server.log
+
+# === TEST ARTIFACTS ===
+coverage/
+.nyc_output/

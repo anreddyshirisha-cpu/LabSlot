@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LAB•SLOT // Shared Laboratory Equipment Booking & Conflict Prevention System</title>
+  <meta name="description" content="Precision instrument scheduling, atomic overlap prevention, restricted equipment authorization, and operational telemetry for shared laboratories.">
+  
+  <!-- CSS Stylesheets -->
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/console-theme.css">
+  <link rel="stylesheet" href="css/timetable.css">
+  <link rel="stylesheet" href="css/components.css">
+  
+  <!-- Google Fonts: Space Grotesk & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- ========================================================================= -->
+  <!-- 1. TELEMETRY HUD & NAVIGATION BAR -->
+  <!-- ========================================================================= -->
+  <header class="console-header">
+    <!-- Top Telemetry Status Ticker -->
+    <div class="hud-topbar">
+      <div class="app-container flex justify-between items-center">
+        <div class="flex items-center gap-6">
+          <div class="hud-ticker-item">
+            <span class="hud-dot online" id="hud-status-dot"></span>
+            <span>SYSTEM STATUS: <span class="hud-val" id="hud-status-text">ONLINE [POSTGRESQL ACTIVE]</span></span>
+          </div>
+          <div class="hud-ticker-item">
+            <span>FLEET STATUS: <span class="hud-val" id="hud-fleet-text">6 INSTRUMENTS MONITORED</span></span>
+          </div>
+          <div class="hud-ticker-item">
+            <span>CONFLICTS PREVENTED: <span class="hud-val" id="hud-conflicts-count">--</span></span>
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="hud-ticker-item">
+            <span>ACTIVE DOWNTIME: <span class="hud-val" id="hud-downtime-text">-- HRS</span></span>
+          </div>
+          <div class="hud-ticker-item" id="hud-overdue-alert" style="display: none;">
+            <span class="hud-dot alert"></span>
+            <span style="color: #ef4444; font-weight: bold;" id="hud-overdue-text">1 OVERDUE SESSION</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Navigation Bar -->
+    <div class="nav-main">
+      <div class="app-container flex justify-between items-center">
+        <!-- Brand identity -->
+        <a href="#catalogue" class="brand-badge" id="brand-link">
+          <div class="brand-icon">⚡</div>
+          <div>
+            <div class="brand-title">LAB<span style="color: var(--cyan-primary);">•</span>SLOT</div>
+            <div class="brand-sub">CONFLICT-PREVENTION SYSTEM</div>
+          </div>
+        </a>
+
+        <!-- Navigation Tabs -->
+        <nav>
+          <ul class="nav-tabs">
+            <li>
+              <button class="nav-tab-btn active" data-tab="catalogue">
+                <span>🔬</span> Instrument Fleet
+              </button>
+            </li>
+            <li>
+              <button class="nav-tab-btn" data-tab="bookings" id="nav-tab-bookings">
+                <span>📋</span> My Reservations
+              </button>
+            </li>
+            <li id="nav-item-approvals" class="hidden">
+              <button class="nav-tab-btn" data-tab="approvals">
+                <span>🛡️</span> Approvals Queue
+                <span class="nav-badge" id="nav-badge-approvals">0</span>
+              </button>
+            </li>
+            <li id="nav-item-maintenance" class="hidden">
+              <button class="nav-tab-btn" data-tab="maintenance">
+                <span>⚙️</span> Maintenance Locks
+              </button>
+            </li>
+            <li>
+              <button class="nav-tab-btn" data-tab="incidents">
+                <span>⚠</span> Incident Reports
+              </button>
+            </li>
+            <li>
+              <button class="nav-tab-btn" data-tab="analytics">
+                <span>📊</span> Telemetry & Metrics
+              </button>
+            </li>
+          </ul>
+        </nav>
+
+        <!-- User Profile & Quick Demo Persona Switcher -->
+        <div class="user-hud-panel">
+          <div class="flex flex-col items-end">
+            <div class="flex items-center gap-2">
+              <span class="role-badge role-visitor" id="current-user-role">GUEST</span>
+              <span id="current-user-name" style="font-weight: 600; font-size: 13px;">Visitor</span>
+            </div>
+            <!-- Quick Demo Persona Switcher -->
+            <div class="flex items-center gap-1" style="margin-top: 2px;">
+              <span style="font-size: 10px; color: var(--text-dim); font-family: var(--font-mono);">DEMO ROLE:</span>
+              <select id="demo-role-select" class="demo-role-select" title="Switch demo user role for evaluation">
+                <option value="visitor">Visitor (Guest)</option>
+                <option value="student" selected>Alex Chen (Student)</option>
+                <option value="operator">Sarah Jenkins (Operator)</option>
+                <option value="admin">Dr. Marcus Vance (Admin)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Auth Actions -->
+          <div id="auth-guest-actions">
+            <button class="btn btn-outline btn-sm" id="btn-open-login">Sign In</button>
+          </div>
+          <div id="auth-user-actions" class="hidden">
+            <button class="btn btn-outline btn-sm" id="btn-logout" title="Sign out session">Sign Out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- 2. MAIN APPLICATION CONTENT -->
+  <!-- ========================================================================= -->
+  <main class="app-container" style="padding-top: 24px; padding-bottom: 60px;">
+
+    <!-- ======================================================================= -->
+    <!-- VIEW: CATALOGUE & AVAILABILITY-FIRST LANDING -->
+    <!-- ======================================================================= -->
+    <section id="view-catalogue" class="tab-view active">
+      <!-- Landing Hero -->
+      <div class="hero-section">
+        <div class="hero-tag">ATOMIC SLOT CONFLICT PREVENTION // PRECISION TIMETABLE MATRIX</div>
+        <h1 class="hero-title">Shared Laboratory Equipment Booking & Collision-Immune Scheduling</h1>
+        <p class="hero-desc">
+          Eliminate double-booking conflicts, prevent overdue equipment monopolization, and automate safety handover checklists across shared research instrumentation.
+        </p>
+
+        <!-- Quick Slot Finder Bar -->
+        <div class="quick-finder-bar">
+          <div class="finder-field">
+            <label class="finder-label">1. Instrument Category</label>
+            <select id="finder-category" class="finder-select">
+              <option value="all">All Categories (6 Instruments)</option>
+              <option value="Spectroscopy">Spectroscopy</option>
+              <option value="Electron Microscopy">Electron Microscopy</option>
+              <option value="Chromatography">Chromatography</option>
+              <option value="Surface Science">Surface Science</option>
+              <option value="Laser & Optical">Laser & Optical</option>
+            </select>
+          </div>
+          <div class="finder-field">
+            <label class="finder-label">2. Target Date</label>
+            <input type="date" id="finder-date" class="finder-input">
+          </div>
+          <div class="finder-field">
+            <label class="finder-label">3. Certification Restriction</label>
+            <select id="finder-restricted" class="finder-select">
+              <option value="all">All Access Levels</option>
+              <option value="false">Open Equipment Only</option>
+              <option value="true">Restricted (Approval Req.)</option>
+            </select>
+          </div>
+          <div style="align-self: flex-end;">
+            <button class="btn btn-primary" id="btn-apply-finder">Filter Fleet</button>
+          </div>
+        </div>
+
+        <!-- High-level Telemetry Stats -->
+        <div class="hero-stats-grid">
+          <div class="stat-box">
+            <div class="stat-val" id="stat-instruments-count">6</div>
+            <div class="stat-label">Total Shared Fleet</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="stat-utilization-rate">--%</div>
+            <div class="stat-label">Fleet Utilization Rate</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="stat-conflicts-prevented" style="color: var(--status-available);">--</div>
+            <div class="stat-label">Collisions Prevented</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="stat-peak-window" style="font-size: 20px;">--</div>
+            <div class="stat-label">Peak Demand Window</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Catalogue Filter Toolbar -->
+      <div class="flex justify-between items-center" style="margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+        <div class="flex items-center gap-3" style="flex: 1; max-width: 480px;">
+          <input type="text" id="catalogue-search-input" class="form-input" placeholder="Search by instrument name, code, lab room or building...">
+        </div>
+        <div class="flex items-center gap-3">
+          <select id="catalogue-status-filter" class="form-select" style="width: auto;">
+            <option value="all">Status: All</option>
+            <option value="available">Status: Available</option>
+            <option value="in_use">Status: In Use</option>
+            <option value="maintenance">Status: In Maintenance</option>
+          </select>
+          <button class="btn btn-secondary hidden" id="btn-add-equipment-modal">+ Add Instrument</button>
+        </div>
+      </div>
+
+      <!-- Equipment Cards Grid -->
+      <div id="equipment-grid" class="grid" style="grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 24px;">
+        <!-- Dynamic Equipment Cards Injected by JS -->
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- VIEW: MY RESERVATIONS (STUDENT / RESEARCHER DASHBOARD) -->
+    <!-- ======================================================================= -->
+    <section id="view-bookings" class="tab-view hidden">
+      <div class="flex justify-between items-center" style="margin-bottom: 24px;">
+        <div>
+          <h2>Research Bookings & Handover Workflows</h2>
+          <p>Track your scheduled sessions, launch safety check-in checklists, and complete return handovers.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="bookings-filter-status" class="form-select" style="width: auto;">
+            <option value="all">All Statuses</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="pending_approval">Pending Approval</option>
+            <option value="checked_in">Checked In (Active)</option>
+            <option value="overdue">Overdue</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <button class="btn btn-outline" id="btn-refresh-bookings">↻ Refresh</button>
+        </div>
+      </div>
+
+      <!-- Bookings Table Container -->
+      <div class="data-table-wrapper">
+        <table class="data-table" id="bookings-table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Instrument</th>
+              <th>Reserved Time Slot</th>
+              <th>Research Purpose</th>
+              <th>Researcher</th>
+              <th>Primary Actions</th>
+            </tr>
+          </thead>
+          <tbody id="bookings-tbody">
+            <!-- Dynamic rows injected by JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- VIEW: RESTRICTED APPROVALS QUEUE (OPERATOR / ADMIN) -->
+    <!-- ======================================================================= -->
+    <section id="view-approvals" class="tab-view hidden">
+      <div class="flex justify-between items-center" style="margin-bottom: 24px;">
+        <div>
+          <h2>Restricted Equipment Authorization Workbench</h2>
+          <p>Review applicant qualifications and authorize or reject reservations on restricted analytical instruments.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="approvals-filter-status" class="form-select" style="width: auto;">
+            <option value="pending">Pending Review</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="all">All History</option>
+          </select>
+          <button class="btn btn-outline" id="btn-refresh-approvals">↻ Refresh</button>
+        </div>
+      </div>
+
+      <div id="approvals-queue-container" class="flex flex-col gap-4">
+        <!-- Dynamic Approval Cards injected by JS -->
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- VIEW: MAINTENANCE LOCKOUT MANAGER (OPERATOR / ADMIN) -->
+    <!-- ======================================================================= -->
+    <section id="view-maintenance" class="tab-view hidden">
+      <div class="flex justify-between items-center" style="margin-bottom: 24px;">
+        <div>
+          <h2>Preventative & Emergency Maintenance Lockout Manager</h2>
+          <p>Lock out time windows for calibration, routine service, or emergency repairs to prevent overlapping student reservations.</p>
+        </div>
+        <button class="btn btn-primary" id="btn-open-schedule-maintenance">+ Schedule Maintenance Block</button>
+      </div>
+
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Instrument</th>
+              <th>Type</th>
+              <th>Lockout Interval</th>
+              <th>Technician / Service Engineer</th>
+              <th>Notes & Scope</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="maintenance-tbody">
+            <!-- Dynamic rows injected by JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- VIEW: INCIDENT & DAMAGE REPORTS -->
+    <!-- ======================================================================= -->
+    <section id="view-incidents" class="tab-view hidden">
+      <div class="flex justify-between items-center" style="margin-bottom: 24px;">
+        <div>
+          <h2>Damage, Misalignment & Incident Reports</h2>
+          <p>Transparent incident tracking for instrument damages, optical misalignments, and overdue infractions.</p>
+        </div>
+        <button class="btn btn-danger" id="btn-open-report-incident">⚠ Report Malfunction / Damage</button>
+      </div>
+
+      <div id="incidents-container" class="grid" style="grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 20px;">
+        <!-- Dynamic incident cards injected by JS -->
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- VIEW: TELEMETRY & UTILIZATION METRICS DASHBOARD -->
+    <!-- ======================================================================= -->
+    <section id="view-analytics" class="tab-view hidden">
+      <div class="flex justify-between items-center" style="margin-bottom: 24px;">
+        <div>
+          <h2>Facility Operational Telemetry & Utilization Dashboard</h2>
+          <p>Comprehensive utilization rates, collision prevention metrics, and audit event ledger.</p>
+        </div>
+        <button class="btn btn-outline" id="btn-refresh-analytics">↻ Refresh Telemetry</button>
+      </div>
+
+      <!-- KPI Overview Grid -->
+      <div class="hero-stats-grid" style="margin-top: 0; margin-bottom: 32px;">
+        <div class="stat-box">
+          <div class="stat-val" id="tele-total-hours">--</div>
+          <div class="stat-label">Total Booked Hours</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="tele-conflicts">--</div>
+          <div class="stat-label">Conflicts Prevented</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="tele-downtime" style="color: #f97316;">--</div>
+          <div class="stat-label">Maintenance Downtime (Hrs)</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="tele-open-incidents" style="color: #ef4444;">--</div>
+          <div class="stat-label">Active Incidents</div>
+        </div>
+      </div>
+
+      <!-- Utilization Bar Chart by Instrument -->
+      <div class="console-card" style="margin-bottom: 32px;">
+        <div class="flex justify-between items-center" style="margin-bottom: 16px;">
+          <h3 style="font-size: 16px;">Fleet Instrument Utilization Rate (%)</h3>
+          <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);">Operating Window: 30 Days (420 hrs available)</span>
+        </div>
+        <div id="utilization-bars-container" class="flex flex-col gap-4">
+          <!-- Dynamic Utilization Bars Injected by JS -->
+        </div>
+      </div>
+
+      <!-- Hourly Usage Distribution Heatmap & Audit Log -->
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 24px;">
+        <div class="console-card">
+          <h3 style="font-size: 16px; margin-bottom: 16px;">Peak Operating Hours Distribution (08:00 - 22:00)</h3>
+          <div id="hourly-bars-container" class="flex items-end gap-2" style="height: 180px; padding-top: 20px;">
+            <!-- Dynamic vertical hourly bars injected by JS -->
+          </div>
+          <div class="flex justify-between" style="font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); margin-top: 8px;">
+            <span>08:00</span>
+            <span>12:00</span>
+            <span>16:00</span>
+            <span>20:00</span>
+            <span>22:00</span>
+          </div>
+        </div>
+
+        <div class="console-card">
+          <h3 style="font-size: 16px; margin-bottom: 16px;">Real-Time System Audit Event Trail</h3>
+          <div id="audit-trail-container" class="flex flex-col gap-2" style="max-height: 220px; overflow-y: auto;">
+            <!-- Dynamic audit rows injected by JS -->
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- 3. INTERACTIVE MODALS -->
+  <!-- ========================================================================= -->
+
+  <!-- MODAL: TIMETABLE & AVAILABILITY MATRIX -->
+  <div class="modal-overlay" id="modal-timetable">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="tt-modal-title">Instrument Timetable Grid</div>
+          <div style="font-family: var(--font-mono); font-size: 11px; color: var(--cyan-primary);" id="tt-modal-sub">Code // Location</div>
+        </div>
+        <button class="modal-close-btn" data-close-modal>&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="timetable-header-bar">
+          <div class="flex items-center gap-3">
+            <button class="btn btn-outline btn-sm" id="btn-tt-prev">◀ Prev Week</button>
+            <span id="tt-week-label" style="font-family: var(--font-mono); font-weight: 600; font-size: 12px; color: #fff;">Today + 7 Days</span>
+            <button class="btn btn-outline btn-sm" id="btn-tt-next">Next Week ▶</button>
+          </div>
+          <div class="timetable-legend">
+            <div class="legend-item"><span class="legend-chip free"></span> Free (Click to Book)</div>
+            <div class="legend-item"><span class="legend-chip booked"></span> Confirmed</div>
+            <div class="legend-item"><span class="legend-chip pending"></span> Pending Approval</div>
+            <div class="legend-item"><span class="legend-chip maint"></span> Maintenance Lock</div>
+          </div>
+        </div>
+
+        <!-- Timetable Grid Container -->
+        <div class="timetable-container" style="padding: 0; border: none;">
+          <div id="timetable-grid-target" class="timetable-grid">
+            <!-- Grid injected dynamically -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" data-close-modal>Close Inspector</button>
+        <button class="btn btn-primary" id="btn-tt-open-booking">Book Time Slot</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: TIME-SLOT BOOKING WITH REAL-TIME CONFLICT ENGINE -->
+  <div class="modal-overlay" id="modal-booking">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Reserve Instrument Time-Slot</div>
+          <div id="booking-modal-equip-name" style="font-family: var(--font-mono); font-size: 11px; color: var(--cyan-primary);"></div>
+        </div>
+        <button class="modal-close-btn" data-close-modal>&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-create-booking">
+          <input type="hidden" id="booking-equipment-id">
+
+          <!-- Restricted Equipment Notice Banner (dynamically toggled) -->
+          <div id="booking-restricted-notice" class="hidden" style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 16px; font-size: 12px; color: #fbbf24;">
+            🛡️ <strong>Restricted Instrument:</strong> This instrument requires Level-2+ certification. Your reservation will enter the <em>Pending Approval</em> queue and be verified by a lab operator before confirmation.
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Research Title / Session Label</label>
+            <input type="text" id="booking-title" class="form-input" placeholder="e.g. Perovskite Film Crystal Phase Analysis" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Start Date & Time</label>
+              <input type="datetime-local" id="booking-start-time" class="form-input" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">End Date & Time</label>
+              <input type="datetime-local" id="booking-end-time" class="form-input" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Research Purpose & Experimental Protocol</label>
+            <textarea id="booking-purpose" class="form-textarea" placeholder="Detail your sample types, required detectors/lasers, and safety measures..." required></textarea>
+          </div>
+
+          <!-- Real-time Overlap Conflict Checker Banner -->
+          <div id="booking-conflict-banner" class="conflict-banner success">
+            <span class="conflict-icon">✓</span>
+            <div id="booking-conflict-msg">Slot is clear. Concurrency & maintenance locks verified.</div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-close-modal>Cancel</button>
+        <button type="button" class="btn btn-secondary" id="btn-verify-conflict">Verify Slot</button>
+        <button type="submit" form="form-create-booking" class="btn btn-primary" id="btn-confirm-booking">Confirm Booking</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ISSUE & RETURN SAFETY HANDOVER CHECKLIST -->
+  <div class="modal-overlay" id="modal-checklist">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="checklist-modal-title">Equipment Safety Handover Checklist</div>
+          <div id="checklist-modal-sub" style="font-family: var(--font-mono); font-size: 11px; color: var(--cyan-primary);"></div>
+        </div>
+        <button class="modal-close-btn" data-close-modal>&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-checklist">
+          <input type="hidden" id="checklist-booking-id">
+          <input type="hidden" id="checklist-type" value="issue">
+
+          <p style="font-size: 13px; margin-bottom: 16px;" id="checklist-instructions">
+            Please inspect the instrument physical status and confirm standard Good Laboratory Practice (GLP) safety requirements prior to operation.
+          </p>
+
+          <div class="checklist-item">
+            <div>
+              <div class="checklist-text">Chamber & Stage Cleanliness</div>
+              <div class="checklist-sub">No sample debris, vacuum clean, lenses free of residue</div>
+            </div>
+            <input type="checkbox" id="chk-cleanliness" class="switch-checkbox" checked>
+          </div>
+
+          <div class="checklist-item">
+            <div>
+              <div class="checklist-text">Detector Baseline & Alignment</div>
+              <div class="checklist-sub">Sensors calibrated, beam/detector optical zero aligned</div>
+            </div>
+            <input type="checkbox" id="chk-calibration" class="switch-checkbox" checked>
+          </div>
+
+          <div class="checklist-item">
+            <div>
+              <div class="checklist-text">Consumables & Cryo / Gas Pressure</div>
+              <div class="checklist-sub">Liquid nitrogen dewar filled, carrier gas >= 2.0 bar</div>
+            </div>
+            <input type="checkbox" id="chk-consumables" class="switch-checkbox" checked>
+          </div>
+
+          <div class="checklist-item">
+            <div>
+              <div class="checklist-text">Safety Interlocks & Emergency Stop</div>
+              <div class="checklist-sub">Door locks operational, radiation/laser guards active</div>
+            </div>
+            <input type="checkbox" id="chk-safety" class="switch-checkbox" checked>
+          </div>
+
+          <div class="checklist-item">
+            <div>
+              <div class="checklist-text">Data Export & Workspace Sanitization</div>
+              <div class="checklist-sub">Raw spectra transferred, workstation wiped</div>
+            </div>
+            <input type="checkbox" id="chk-data" class="switch-checkbox" checked>
+          </div>
+
+          <div class="form-group" style="margin-top: 20px;">
+            <label class="form-label">Physical Condition Rating</label>
+            <div class="rating-picker" id="condition-rating-picker">
+              <button type="button" class="star-btn active" data-rating="1">★</button>
+              <button type="button" class="star-btn active" data-rating="2">★</button>
+              <button type="button" class="star-btn active" data-rating="3">★</button>
+              <button type="button" class="star-btn active" data-rating="4">★</button>
+              <button type="button" class="star-btn active" data-rating="5">★</button>
+              <span id="condition-rating-text" style="font-family: var(--font-mono); font-size: 12px; color: #fbbf24; margin-left: 8px;">5 / 5 (Pristine)</span>
+            </div>
+            <input type="hidden" id="checklist-rating" value="5">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Handover Notes / Inspection Observations</label>
+            <textarea id="checklist-notes" class="form-textarea" placeholder="Note any anomalies, pre-existing wear, or specific parameter adjustments..."></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-close-modal>Cancel</button>
+        <button type="submit" form="form-checklist" class="btn btn-primary" id="btn-submit-checklist">Verify & Complete Handover</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SCHEDULE MAINTENANCE LOCKOUT (OPERATOR / ADMIN) -->
+  <div class="modal-overlay" id="modal-maintenance">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Schedule Preventative Maintenance Window</div>
+          <div style="font-family: var(--font-mono); font-size: 11px; color: var(--cyan-primary);">Locks out slots to prevent student bookings</div>
+        </div>
+        <button class="modal-close-btn" data-close-modal>&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-schedule-maintenance">
+          <div class="form-group">
+            <label class="form-label">Target Instrument</label>
+            <select id="maint-equipment-id" class="form-select" required></select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Maintenance Classification</label>
+              <select id="maint-type" class="form-select" required>
+                <option value="routine">Routine Preventative Service</option>
+                <option value="calibration">Detector / Goniometer Calibration</option>
+                <option value="emergency_repair">Emergency Repair</option>
+                <option value="cleaning">Decontamination & Deep Clean</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Technician / Engineer</label>
+              <input type="text" id="maint-tech-name" class="form-input" placeholder="e.g. Field Service Specialist" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Lockout Start Time</label>
+              <input type="datetime-local" id="maint-start-time" class="form-input" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Lockout End Time</label>
+              <input type="datetime-local" id="maint-end-time" class="form-input" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Scope of Work & Notes</label>
+            <textarea id="maint-notes" class="form-textarea" placeholder="Detail component replacements, bakeout cycles, or calibration standards used..." required></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-close-modal>Cancel</button>
+        <button type="submit" form="form-schedule-maintenance" class="btn btn-warning">Engage Maintenance Lock</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: REPORT DAMAGE / MALFUNCTION -->
+  <div class="modal-overlay" id="modal-incident">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" style="color: #ef4444;">⚠ Report Instrument Malfunction / Damage</div>
+          <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);">Automated facility maintenance escalation</div>
+        </div>
+        <button class="modal-close-btn" data-close-modal>&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-report-incident">
+          <div class="form-group">
+            <label class="form-label">Affected Equipment</label>
+            <select id="incident-equipment-id" class="form-select" required></select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Incident Type</label>
+              <select id="incident-type" class="form-select" required>
+                <option value="physical_damage">Physical Damage / Broken Component</option>
+                <option value="optical_misalignment">Optical / Laser Misalignment</option>
+                <option value="software_crash">Controller Crash / Firmware Error</option>
+                <option value="contamination">Sample Contamination in Chamber</option>
+                <option value="overdue_lockout">Overdue / Abandoned Run Lockout</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Severity Level</label>
+              <select id="incident-severity" class="form-select" required>
+                <option value="minor">Minor (Instrument usable with caution)</option>
+                <option value="moderate">Moderate (Certain modes degraded)</option>
+                <option value="critical_downtime">Critical Downtime (Locks instrument offline)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Estimated Downtime Hours</label>
+            <input type="number" id="incident-downtime" class="form-input" min="0" max="720" value="4" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Detailed Incident Description</label>
+            <textarea id="incident-desc" class="form-textarea" placeholder="Describe symptoms, error codes displayed on instrument console, or damaged parts..." required></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-close-modal>Cancel</button>
+        <button type="submit" form="form-report-incident" class="btn btn-danger">Submit Incident Report</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: AUTHENTICATION (SIGN IN / REGISTER) -->
+  <div class="modal-overlay" id="modal-auth">
+    <div class="modal-dialog" style="max-width: 480px;">
+      <div class="modal-header">
+        <div class="modal-title" id="auth-modal-title">Sign In to Lab Console</div>
+        <button class="modal-close-btn" data-close-modal>&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Auth Tabs: Login vs Register -->
+        <div class="flex items-center gap-2" style="margin-bottom: 20px; border-bottom: 1px solid var(--border-dim); padding-bottom: 8px;">
+          <button type="button" class="btn btn-sm btn-secondary active" id="tab-login-btn">Sign In</button>
+          <button type="button" class="btn btn-sm btn-outline" id="tab-register-btn">Register Researcher</button>
+        </div>
+
+        <!-- Login Form -->
+        <form id="form-login">
+          <div class="form-group">
+            <label class="form-label">Institutional Email</label>
+            <input type="email" id="login-email" class="form-input" value="student@labhub.edu" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" id="login-password" class="form-input" value="Password123!" required>
+          </div>
+          <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 16px;">
+            Demo Accounts: <code>student@labhub.edu</code>, <code>operator@labhub.edu</code>, <code>admin@labhub.edu</code> (Password: <code>Password123!</code>)
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%;">Authenticate Session</button>
+        </form>
+
+        <!-- Register Form -->
+        <form id="form-register" class="hidden">
+          <div class="form-group">
+            <label class="form-label">Full Name</label>
+            <input type="text" id="reg-name" class="form-input" placeholder="e.g. Dr. Maya Lin">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Institutional Email</label>
+            <input type="email" id="reg-email" class="form-input" placeholder="maya.lin@university.edu">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Department / Research Lab</label>
+            <input type="text" id="reg-dept" class="form-input" placeholder="e.g. Department of Chemistry">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" id="reg-password" class="form-input" placeholder="••••••••">
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%;">Create Account</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="js/api.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/views/landingView.js"></script>
+  <script src="js/views/catalogueView.js"></script>
+  <script src="js/views/timetableModal.js"></script>
+  <script src="js/views/bookingModal.js"></script>
+  <script src="js/views/userBookingsView.js"></script>
+  <script src="js/views/approvalQueueView.js"></script>
+  <script src="js/views/checklistModal.js"></script>
+  <script src="js/views/maintenanceView.js"></script>
+  <script src="js/views/incidentModal.js"></script>
+  <script src="js/views/utilizationDashboard.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "name": "lab-slot-booking-conflict-system",
+  "version": "1.0.0",
+  "description": "Shared Laboratory Equipment Booking and Conflict Prevention System",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js",
+    "test": "node tests/api.test.js",
+    "db:seed": "node server/db/seedRunner.js"
+  },
+  "keywords": [
+    "laboratory",
+    "equipment-booking",
+    "conflict-prevention",
+    "supabase",
+    "postgresql",
+    "express"
+  ],
+  "author": "Antigravity Engineering",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.23.1",
+    "ws": "^8.22.0"
+  }
+}
